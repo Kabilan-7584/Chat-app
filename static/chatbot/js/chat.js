@@ -90,6 +90,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /*
      * =========================================
+     * LOAD CURRENT THREAD
+     * =========================================
+     */
+
+    loadThreadMessages(currentThreadId);
+
+
+    /*
+     * =========================================
      * SEND MESSAGE
      * =========================================
      */
@@ -103,7 +112,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const message =
                 messageInput.value.trim();
 
-
             if (!message) {
 
                 showStatus(
@@ -113,7 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 return;
             }
-
 
             if (message.length > 10000) {
 
@@ -125,7 +132,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-
             if (!currentThreadId) {
 
                 showStatus(
@@ -136,21 +142,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-
             addMessage(
                 "user",
                 message
             );
-
 
             messageInput.value = "";
 
             messageInput.style.height =
                 "auto";
 
-
             setLoadingState(true);
-
 
             try {
 
@@ -177,10 +179,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                     );
 
-
                 const data =
                     await response.json();
-
 
                 if (!response.ok) {
 
@@ -188,9 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         data.error ||
                         "Unable to send message."
                     );
-
                 }
-
 
                 if (!data.success) {
 
@@ -198,21 +196,17 @@ document.addEventListener("DOMContentLoaded", () => {
                         data.error ||
                         "Unable to generate response."
                     );
-
                 }
-
 
                 addMessage(
                     "assistant",
                     data.message.content
                 );
 
-
                 showStatus(
                     "Powered by Google Gemini.",
                     "success"
                 );
-
 
             } catch (error) {
 
@@ -245,7 +239,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         messageInput.disabled =
             isLoading;
-
 
         if (isLoading) {
 
@@ -283,11 +276,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 "empty-chat-message"
             );
 
-
         if (emptyMessage) {
             emptyMessage.remove();
         }
-
 
         const messageElement =
             document.createElement("div");
@@ -296,7 +287,6 @@ document.addEventListener("DOMContentLoaded", () => {
             role === "user"
                 ? "message user-message"
                 : "message assistant-message";
-
 
         const avatar =
             document.createElement("div");
@@ -309,13 +299,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? "You"
                 : "AI";
 
-
         const content =
             document.createElement("div");
 
         content.className =
             "message-content";
-
 
         const roleElement =
             document.createElement("div");
@@ -328,22 +316,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? "You"
                 : "Assistant";
 
-
         const textElement =
             document.createElement("div");
 
         textElement.className =
             "message-text";
 
-        /*
-         * textContent is intentionally used.
-         *
-         * This prevents HTML injection.
-         */
-
         textElement.textContent =
             text;
-
 
         content.appendChild(
             roleElement
@@ -353,7 +333,6 @@ document.addEventListener("DOMContentLoaded", () => {
             textElement
         );
 
-
         messageElement.appendChild(
             avatar
         );
@@ -362,14 +341,110 @@ document.addEventListener("DOMContentLoaded", () => {
             content
         );
 
-
         messagesContainer.appendChild(
             messageElement
         );
 
-
         messagesContainer.scrollTop =
             messagesContainer.scrollHeight;
+
+    }
+
+
+    /*
+     * =========================================
+     * LOAD THREAD MESSAGES
+     * =========================================
+     */
+
+    async function loadThreadMessages(
+        threadId
+    ) {
+
+        if (!threadId) {
+            return;
+        }
+
+        try {
+
+            showStatus(
+                "Loading conversation...",
+                "loading"
+            );
+
+            const response =
+                await fetch(
+                    `/chat/${threadId}/messages/`,
+                    {
+                        method: "GET",
+
+                        headers: {
+                            "X-Requested-With":
+                                "XMLHttpRequest",
+                        },
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.error ||
+                    "Unable to load conversation."
+                );
+            }
+
+            messagesContainer.innerHTML = "";
+
+            if (
+                !data.messages ||
+                data.messages.length === 0
+            ) {
+
+                addEmptyChatMessage();
+
+            } else {
+
+                data.messages.forEach(
+                    (message) => {
+
+                        if (
+                            message.role === "user" ||
+                            message.role === "assistant"
+                        ) {
+
+                            addMessage(
+                                message.role,
+                                message.content
+                            );
+
+                        }
+
+                    }
+                );
+
+            }
+
+            showStatus(
+                "Powered by Google Gemini.",
+                "success"
+            );
+
+        } catch (error) {
+
+            messagesContainer.innerHTML = "";
+
+            addEmptyChatMessage();
+
+            showStatus(
+                error.message ||
+                "Unable to load conversation.",
+                "error"
+            );
+
+        }
 
     }
 
@@ -392,7 +467,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 newChatButton.textContent =
                     "Creating...";
 
-
                 const response =
                     await fetch(
                         createThreadUrl,
@@ -409,10 +483,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                     );
 
-
                 const data =
                     await response.json();
-
 
                 if (!response.ok) {
 
@@ -423,39 +495,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 }
 
-
                 currentThreadId =
                     data.thread.id;
-
 
                 sendUrlTemplate =
                     `/chat/${currentThreadId}/message/`;
 
-
                 chatTitle.textContent =
                     data.thread.title;
 
-
-                messagesContainer.innerHTML = "";
-
+                messagesContainer.innerHTML =
+                    "";
 
                 addEmptyChatMessage();
-
 
                 addHistoryItem(
                     data.thread.id,
                     data.thread.title
                 );
 
-
                 messageInput.focus();
-
 
                 showStatus(
                     "New chat created.",
                     "success"
                 );
-
 
             } catch (error) {
 
@@ -508,7 +572,6 @@ document.addEventListener("DOMContentLoaded", () => {
         button.textContent =
             title;
 
-
         const existingItems =
             document.querySelectorAll(
                 ".history-item"
@@ -516,23 +579,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
         existingItems.forEach(
             (item) => {
+
                 item.classList.remove(
                     "active"
                 );
+
             }
         );
-
 
         button.addEventListener(
             "click",
             () => {
+
                 switchThread(
                     threadId,
                     title
                 );
+
             }
         );
-
 
         chatHistoryList.prepend(
             button
@@ -572,16 +637,9 @@ document.addEventListener("DOMContentLoaded", () => {
      * =========================================
      * SWITCH THREAD
      * =========================================
-     *
-     * Phase 7 deliberately does not load
-     * previous messages yet.
-     *
-     * Conversation history API will be
-     * implemented with conversation memory
-     * in a later phase.
      */
 
-    function switchThread(
+    async function switchThread(
         threadId,
         title
     ) {
@@ -592,10 +650,8 @@ document.addEventListener("DOMContentLoaded", () => {
         sendUrlTemplate =
             `/chat/${threadId}/message/`;
 
-
         chatTitle.textContent =
             title;
-
 
         document
             .querySelectorAll(".history-item")
@@ -609,12 +665,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             );
 
-
         const selected =
             document.querySelector(
                 `.history-item[data-thread-id="${threadId}"]`
             );
-
 
         if (selected) {
 
@@ -624,22 +678,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
         }
 
-
-        /*
-         * We intentionally clear the visible
-         * messages because message-history
-         * loading is outside Phase 7.
-         */
-
         messagesContainer.innerHTML = "";
 
-        addEmptyChatMessage();
+        showStatus(
+            "Loading conversation...",
+            "loading"
+        );
 
+        await loadThreadMessages(
+            threadId
+        );
 
         if (window.innerWidth <= 768) {
+
             sidebar.classList.remove(
                 "open"
             );
+
         }
 
     }
@@ -662,7 +717,6 @@ document.addEventListener("DOMContentLoaded", () => {
         empty.id =
             "empty-chat-message";
 
-
         empty.innerHTML = `
             <div class="empty-chat-icon">
                 AI
@@ -677,7 +731,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 generate a response.
             </p>
         `;
-
 
         messagesContainer.appendChild(
             empty
@@ -700,13 +753,11 @@ document.addEventListener("DOMContentLoaded", () => {
         inputStatus.textContent =
             message;
 
-
         inputStatus.classList.remove(
             "status-error",
             "status-loading",
             "status-success"
         );
-
 
         if (type === "error") {
 

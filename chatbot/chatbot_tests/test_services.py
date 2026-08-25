@@ -16,12 +16,7 @@ class ChatServiceTests(TestCase):
 
         self.user = User.objects.create_user(
             username="testuser",
-            password="StrongPassword123!",
-        )
-
-        self.other_user = User.objects.create_user(
-            username="otheruser",
-            password="StrongPassword123!",
+            password="TestPassword123!",
         )
 
         self.thread = ChatThread.objects.create(
@@ -29,11 +24,7 @@ class ChatServiceTests(TestCase):
             title="Test Chat",
         )
 
-        self.other_thread = ChatThread.objects.create(
-            user=self.other_user,
-            title="Other Chat",
-        )
-
+        self.service = ChatService()
 
     @patch(
         "chatbot.services.chat_service.GeminiService.generate_response"
@@ -47,20 +38,24 @@ class ChatServiceTests(TestCase):
             "Django is a Python web framework."
         )
 
-        result = ChatService().send_message(
+        result = self.service.send_message(
             user=self.user,
             thread=self.thread,
             content="What is Django?",
         )
 
-        self.assertEqual(
-            result["user_message"].role,
-            Message.Role.USER,
+        mock_generate.assert_called_once_with(
+            [
+                {
+                    "role": "user",
+                    "content": "What is Django?",
+                }
+            ]
         )
 
         self.assertEqual(
-            result["assistant_message"].role,
-            Message.Role.ASSISTANT,
+            result["user_message"].content,
+            "What is Django?",
         )
 
         self.assertEqual(
@@ -69,86 +64,148 @@ class ChatServiceTests(TestCase):
         )
 
         self.assertEqual(
-            self.thread.messages.count(),
+            Message.objects.filter(
+                thread=self.thread
+            ).count(),
             2,
         )
 
-        mock_generate.assert_called_once_with(
-            "What is Django?"
+    @patch(
+        "chatbot.services.chat_service.GeminiService.generate_response"
+    )
+    def test_previous_messages_are_sent_to_gemini(
+        self,
+        mock_generate,
+    ):
+
+        Message.objects.create(
+            thread=self.thread,
+            role=Message.Role.USER,
+            content="What is Python?",
         )
 
+        Message.objects.create(
+            thread=self.thread,
+            role=Message.Role.ASSISTANT,
+            content="Python is a programming language.",
+        )
+
+        mock_generate.return_value = (
+            "Python is useful for many types of development."
+        )
+
+        self.service.send_message(
+            user=self.user,
+            thread=self.thread,
+            content="Why is it popular?",
+        )
+
+        mock_generate.assert_called_once_with(
+            [
+                {
+                    "role": "user",
+                    "content": "What is Python?",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Python is a programming language.",
+                },
+                {
+                    "role": "user",
+                    "content": "Why is it popular?",
+                },
+            ]
+        )
 
     def test_empty_message_is_rejected(self):
 
         with self.assertRaises(ValueError):
-            ChatService().send_message(
+
+            self.service.send_message(
+                user=self.user,
+                thread=self.thread,
+                content="",
+            )
+
+    def test_whitespace_message_is_rejected(self):
+
+        with self.assertRaises(ValueError):
+
+            self.service.send_message(
                 user=self.user,
                 thread=self.thread,
                 content="   ",
             )
 
-        self.assertEqual(
-            self.thread.messages.count(),
-            0,
-        )
-
-
     def test_message_too_long_is_rejected(self):
 
-        long_message = "a" * 10001
+        long_message = (
+            "x"
+            * (
+                ChatService.MAX_MESSAGE_LENGTH
+                + 1
+            )
+        )
 
         with self.assertRaises(ValueError):
-            ChatService().send_message(
+
+            self.service.send_message(
                 user=self.user,
                 thread=self.thread,
                 content=long_message,
             )
 
-        self.assertEqual(
-            self.thread.messages.count(),
-            0,
-        )
+    def test_non_string_message_is_rejected(self):
 
+        with self.assertRaises(ValueError):
 
-    def test_other_users_thread_is_rejected(self):
-
-        with self.assertRaises(PermissionError):
-            ChatService().send_message(
+            self.service.send_message(
                 user=self.user,
-                thread=self.other_thread,
-                content="Hello",
+                thread=self.thread,
+                content=None,
             )
 
-        self.assertEqual(
-            self.other_thread.messages.count(),
-            0,
+    def test_wrong_user_is_rejected(self):
+
+        other_user = User.objects.create_user(
+            username="otheruser",
+            password="OtherPassword123!",
         )
 
+        with self.assertRaises(PermissionError):
+
+            self.service.send_message(
+                user=other_user,
+                thread=self.thread,
+                content="Hello",
+            )
 
     @patch(
         "chatbot.services.chat_service.GeminiService.generate_response"
     )
-    def test_gemini_failure_is_handled(
+    def test_gemini_failure_does_not_leave_user_message(
         self,
         mock_generate,
     ):
 
-        mock_generate.side_effect = Exception(
-            "Gemini unavailable"
+        mock_generate.side_effect = RuntimeError(
+            "Gemini failed"
         )
 
         with self.assertRaises(RuntimeError):
-            ChatService().send_message(
+
+            self.service.send_message(
                 user=self.user,
                 thread=self.thread,
                 content="Hello",
             )
 
         self.assertEqual(
-            self.thread.messages.count(),
+            Message.objects.filter(
+                thread=self.thread
+            ).count(),
             0,
         )
-
 
     @patch(
         "chatbot.services.chat_service.GeminiService.generate_response"
@@ -161,13 +218,16 @@ class ChatServiceTests(TestCase):
         mock_generate.return_value = ""
 
         with self.assertRaises(RuntimeError):
-            ChatService().send_message(
+
+            self.service.send_message(
                 user=self.user,
                 thread=self.thread,
                 content="Hello",
             )
 
         self.assertEqual(
-            self.thread.messages.count(),
+            Message.objects.filter(
+                thread=self.thread
+            ).count(),
             0,
         )

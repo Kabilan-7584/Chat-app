@@ -20,6 +20,12 @@ urlpatterns = [
     ),
 
     path(
+        "<int:thread_id>/messages/",
+        views.thread_messages,
+        name="thread_messages",
+    ),
+
+    path(
         "<int:thread_id>/message/",
         views.send_message,
         name="send_message",

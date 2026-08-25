@@ -2,10 +2,10 @@ import json
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET, require_POST
 
-from .models import ChatThread
+from .models import ChatThread, Message
 from .services.chat_service import ChatService
 
 
@@ -45,6 +45,45 @@ def dashboard(request):
 
 
 @login_required
+@require_GET
+def thread_messages(request, thread_id):
+    """
+    Return messages for a thread owned by the authenticated user.
+    """
+
+    thread = get_object_or_404(
+        ChatThread,
+        id=thread_id,
+        user=request.user,
+    )
+
+    messages = (
+        Message.objects
+        .filter(thread=thread)
+        .order_by("created_at")
+    )
+
+    return JsonResponse(
+        {
+            "success": True,
+            "thread": {
+                "id": thread.id,
+                "title": thread.title,
+            },
+            "messages": [
+                {
+                    "id": message.id,
+                    "role": message.role,
+                    "content": message.content,
+                    "created_at": message.created_at.isoformat(),
+                }
+                for message in messages
+            ],
+        }
+    )
+
+
+@login_required
 @require_POST
 def create_thread(request):
     """
@@ -75,19 +114,11 @@ def send_message(request, thread_id):
     Receive a user message and generate an AI response.
     """
 
-    # -----------------------------------------
-    # Find ONLY the authenticated user's thread
-    # -----------------------------------------
-
     thread = get_object_or_404(
         ChatThread,
         id=thread_id,
         user=request.user,
     )
-
-    # -----------------------------------------
-    # Parse JSON
-    # -----------------------------------------
 
     try:
         data = json.loads(
@@ -103,15 +134,7 @@ def send_message(request, thread_id):
             status=400,
         )
 
-    # -----------------------------------------
-    # Extract message
-    # -----------------------------------------
-
     content = data.get("message")
-
-    # -----------------------------------------
-    # Process through ChatService
-    # -----------------------------------------
 
     try:
         result = ChatService().send_message(
@@ -161,10 +184,6 @@ def send_message(request, thread_id):
             },
             status=500,
         )
-
-    # -----------------------------------------
-    # Return assistant response
-    # -----------------------------------------
 
     assistant_message = result[
         "assistant_message"

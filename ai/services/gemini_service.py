@@ -1,6 +1,10 @@
 import os
-import time
 
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+)
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 
@@ -10,6 +14,7 @@ class GeminiService:
     """
 
     def __init__(self):
+
         api_key = os.getenv("GEMINI_API_KEY")
 
         if not api_key:
@@ -18,36 +23,86 @@ class GeminiService:
             )
 
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-3.7-flash",
-            temperature=1.0,
-            max_retries=2,
+            model="gemini-3.5-flash-lite",
             api_key=api_key,
+
+            # Faster responses for chat.
+            thinking_level="low",
+
+            # Prevent requests from hanging indefinitely.
+            request_timeout=30,
+
+            # Only one automatic retry.
+            retries=1,
         )
 
-    def generate_response(self, prompt: str) -> str:
+    def generate_response(self, conversation) -> str:
         """
-        Send a prompt to Gemini and return the text response.
-        Retries temporary Gemini failures before giving up.
+        Send a conversation to Gemini and return
+        the assistant response.
         """
 
-        if not prompt or not prompt.strip():
+        if not conversation:
             raise ValueError(
-                "Prompt cannot be empty."
+                "Conversation cannot be empty."
             )
 
-        max_attempts = 3
+        messages = []
 
-        for attempt in range(max_attempts):
-            try:
-                response = self.llm.invoke(prompt)
-                return response.text
+        for item in conversation:
 
-            except Exception as exc:
+            role = item.get("role")
+            content = item.get("content")
 
-                if attempt == max_attempts - 1:
-                    raise RuntimeError(
-                        "Gemini request failed after multiple attempts."
-                    ) from exc
+            if not content:
+                continue
 
-                wait_seconds = 2 ** attempt
-                time.sleep(wait_seconds)
+            if role == "user":
+
+                messages.append(
+                    HumanMessage(
+                        content=content
+                    )
+                )
+
+            elif role == "assistant":
+
+                messages.append(
+                    AIMessage(
+                        content=content
+                    )
+                )
+
+            elif role == "system":
+
+                messages.append(
+                    SystemMessage(
+                        content=content
+                    )
+                )
+
+        if not messages:
+            raise ValueError(
+                "Conversation contains no valid messages."
+            )
+
+        try:
+
+            response = self.llm.invoke(
+                messages
+            )
+
+            response_text = response.text
+
+            if not response_text:
+                raise RuntimeError(
+                    "Gemini returned an empty response."
+                )
+
+            return response_text.strip()
+
+        except Exception as exc:
+
+            raise RuntimeError(
+                "Gemini request failed."
+            ) from exc

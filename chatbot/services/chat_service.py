@@ -6,19 +6,21 @@ class ChatService:
     """
     Application service responsible for processing chat messages.
 
-    Conversation memory is intentionally NOT implemented yet.
-    Only the current user message is sent to Gemini.
+    Conversation memory is implemented by loading previous
+    messages from the current thread and sending them to Gemini.
     """
 
     MAX_MESSAGE_LENGTH = 10000
+    MAX_HISTORY_MESSAGES = 20
 
     def __init__(self):
         self.gemini_service = GeminiService()
 
     def send_message(self, user, thread, content):
         """
-        Validate the request, save the user message,
-        generate an AI response, and save the assistant message.
+        Validate the request, load conversation history,
+        save the user message, generate an AI response,
+        and save the assistant message.
         """
 
         # -----------------------------------------
@@ -53,7 +55,46 @@ class ChatService:
             )
 
         # -----------------------------------------
-        # 3. Save user message
+        # 3. Load previous conversation
+        # -----------------------------------------
+
+        previous_messages = (
+            Message.objects
+            .filter(thread=thread)
+            .order_by("-created_at")[
+                :self.MAX_HISTORY_MESSAGES
+            ]
+        )
+
+        previous_messages = list(
+            reversed(previous_messages)
+        )
+
+        conversation = []
+
+        for message in previous_messages:
+
+            if message.role == Message.Role.USER:
+                role = "user"
+
+            elif message.role == Message.Role.ASSISTANT:
+                role = "assistant"
+
+            elif message.role == Message.Role.SYSTEM:
+                role = "system"
+
+            else:
+                continue
+
+            conversation.append(
+                {
+                    "role": role,
+                    "content": message.content,
+                }
+            )
+
+        # -----------------------------------------
+        # 4. Save current user message
         # -----------------------------------------
 
         user_message = Message.objects.create(
@@ -62,20 +103,28 @@ class ChatService:
             content=content,
         )
 
+        # Add current message to conversation
+        conversation.append(
+            {
+                "role": "user",
+                "content": content,
+            }
+        )
+
         # -----------------------------------------
-        # 4. Call common Gemini service
+        # 5. Send complete conversation to Gemini
         # -----------------------------------------
 
         try:
+
             assistant_content = (
                 self.gemini_service.generate_response(
-                    content
+                    conversation
                 )
             )
 
         except Exception as exc:
-            # Do not leave a user message behind
-            # when AI generation completely fails.
+
             user_message.delete()
 
             raise RuntimeError(
@@ -83,10 +132,11 @@ class ChatService:
             ) from exc
 
         # -----------------------------------------
-        # 5. Validate AI response
+        # 6. Validate AI response
         # -----------------------------------------
 
         if not assistant_content:
+
             user_message.delete()
 
             raise RuntimeError(
@@ -98,6 +148,7 @@ class ChatService:
         ).strip()
 
         if not assistant_content:
+
             user_message.delete()
 
             raise RuntimeError(
@@ -105,7 +156,7 @@ class ChatService:
             )
 
         # -----------------------------------------
-        # 6. Save assistant message
+        # 7. Save assistant response
         # -----------------------------------------
 
         assistant_message = Message.objects.create(
@@ -115,7 +166,7 @@ class ChatService:
         )
 
         # -----------------------------------------
-        # 7. Update thread timestamp
+        # 8. Update thread timestamp
         # -----------------------------------------
 
         thread.save(
