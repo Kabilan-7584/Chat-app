@@ -1,7 +1,10 @@
 from documents.services.retriever_service import (
     RetrieverService,
 )
-from ai.services.gemini_service import GeminiService
+
+from ai.services.gemini_service import (
+    GeminiService,
+)
 
 
 class RAGService:
@@ -10,17 +13,19 @@ class RAGService:
 
     Flow:
 
-    Question
+    User Question
         ↓
     Retriever
         ↓
-    Relevant chunks
+    Relevant Chunks
         ↓
     Context
         ↓
+    Grounded Prompt
+        ↓
     Gemini
         ↓
-    Grounded answer
+    Answer + Sources
     """
 
     DEFAULT_TOP_K = 5
@@ -49,8 +54,8 @@ class RAGService:
         top_k=DEFAULT_TOP_K,
     ):
         """
-        Generate an answer grounded in retrieved
-        document context.
+        Retrieve relevant document chunks and
+        generate a grounded answer using Gemini.
         """
 
         if user_id is None:
@@ -102,7 +107,9 @@ class RAGService:
 
         return {
             "answer": response.strip(),
-            "sources": results,
+            "sources": self._build_sources(
+                results
+            ),
         }
 
     @staticmethod
@@ -124,7 +131,10 @@ class RAGService:
             results,
             start=1,
         ):
-            metadata = result["metadata"]
+            metadata = result.get(
+                "metadata",
+                {},
+            )
 
             context_parts.append(
                 (
@@ -134,13 +144,47 @@ class RAGService:
                     f"Page: "
                     f"{metadata.get('page_number')}\n"
                     f"Content:\n"
-                    f"{result['content']}"
+                    f"{result.get('content', '')}"
                 )
             )
 
         return "\n\n".join(
             context_parts
         )
+
+    @staticmethod
+    def _build_sources(results):
+        """
+        Convert retrieved chunk metadata into
+        user-facing source references.
+        """
+
+        sources = []
+
+        for result in results:
+            metadata = result.get(
+                "metadata",
+                {},
+            )
+
+            sources.append(
+                {
+                    "document_id": metadata.get(
+                        "document_id"
+                    ),
+                    "filename": metadata.get(
+                        "filename"
+                    ),
+                    "page_number": metadata.get(
+                        "page_number"
+                    ),
+                    "chunk_id": result.get(
+                        "id"
+                    ),
+                }
+            )
+
+        return sources
 
     @staticmethod
     def _build_prompt(
