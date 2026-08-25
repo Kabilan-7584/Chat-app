@@ -1,52 +1,35 @@
-from chatbot.models import Message
+from django.db import transaction
+
+from chatbot.models import ChatThread, Message
 from ai.services.gemini_service import GeminiService
 
 
 class ChatService:
     """
-    Application service responsible for processing chat messages.
+    Business logic for authenticated chat conversations.
 
-    Conversation memory is implemented by loading previous
-    messages from the current thread and sending them to Gemini.
+    Responsible for:
+    - validating messages
+    - verifying thread ownership
+    - retrieving conversation history
+    - constructing conversation context
+    - calling Gemini
+    - persisting messages
     """
 
-    MAX_MESSAGE_LENGTH = 10000
-    MAX_HISTORY_MESSAGES = 20
+    MAX_MESSAGE_LENGTH = 4000
 
     def __init__(self):
         self.gemini_service = GeminiService()
 
-    def send_message(self, user, thread, content):
-        """
-        Validate the request, load conversation history,
-        save the user message, generate an AI response,
-        and save the assistant message.
-        """
-
-        # -----------------------------------------
-        # 1. Ownership validation
-        # -----------------------------------------
-
-        if thread.user_id != user.id:
-            raise PermissionError(
-                "You do not have access to this chat thread."
-            )
-
-        # -----------------------------------------
-        # 2. Input validation
-        # -----------------------------------------
-
+    def _validate_message(self, content):
         if not isinstance(content, str):
-            raise ValueError(
-                "Message must be a string."
-            )
+            raise ValueError("Message must be a string.")
 
         content = content.strip()
 
         if not content:
-            raise ValueError(
-                "Message cannot be empty."
-            )
+            raise ValueError("Message cannot be empty.")
 
         if len(content) > self.MAX_MESSAGE_LENGTH:
             raise ValueError(
@@ -54,48 +37,83 @@ class ChatService:
                 f"{self.MAX_MESSAGE_LENGTH} characters."
             )
 
-        # -----------------------------------------
-        # 3. Load previous conversation
-        # -----------------------------------------
+        return content
+
+    def _verify_thread_ownership(self, user, thread):
+        if thread.user_id != user.id:
+            raise PermissionError(
+                "You do not have access to this chat thread."
+            )
+
+    def _build_conversation_context(self, thread, current_message):
+        """
+        Build the ordered conversation context for Gemini.
+
+        Previous messages are retrieved from this thread only.
+        The current user message is appended last.
+        """
 
         previous_messages = (
             Message.objects
             .filter(thread=thread)
-            .order_by("-created_at")[
-                :self.MAX_HISTORY_MESSAGES
-            ]
-        )
-
-        previous_messages = list(
-            reversed(previous_messages)
+            .order_by("created_at", "id")
         )
 
         conversation = []
 
         for message in previous_messages:
-
-            if message.role == Message.Role.USER:
-                role = "user"
-
-            elif message.role == Message.Role.ASSISTANT:
-                role = "assistant"
-
-            elif message.role == Message.Role.SYSTEM:
-                role = "system"
-
-            else:
-                continue
-
             conversation.append(
                 {
-                    "role": role,
+                    "role": message.role,
                     "content": message.content,
                 }
             )
 
-        # -----------------------------------------
-        # 4. Save current user message
-        # -----------------------------------------
+        conversation.append(
+            {
+                "role": Message.Role.USER,
+                "content": current_message,
+            }
+        )
+
+        return conversation
+
+    @transaction.atomic
+    def send_message(self, user, thread, content):
+        """
+        Send a user message using the full conversation context.
+        """
+
+        self._verify_thread_ownership(user, thread)
+
+        content = self._validate_message(content)
+
+        conversation = self._build_conversation_context(
+            thread=thread,
+            current_message=content,
+        )
+
+        try:
+            ai_response = self.gemini_service.generate_response(
+                conversation
+            )
+
+        except Exception as exc:
+            raise RuntimeError(
+                "Unable to generate an AI response."
+            ) from exc
+
+        if not isinstance(ai_response, str):
+            raise RuntimeError(
+                "AI returned an invalid response."
+            )
+
+        ai_response = ai_response.strip()
+
+        if not ai_response:
+            raise RuntimeError(
+                "AI returned an empty response."
+            )
 
         user_message = Message.objects.create(
             thread=thread,
@@ -103,75 +121,13 @@ class ChatService:
             content=content,
         )
 
-        # Add current message to conversation
-        conversation.append(
-            {
-                "role": "user",
-                "content": content,
-            }
-        )
-
-        # -----------------------------------------
-        # 5. Send complete conversation to Gemini
-        # -----------------------------------------
-
-        try:
-
-            assistant_content = (
-                self.gemini_service.generate_response(
-                    conversation
-                )
-            )
-
-        except Exception as exc:
-
-            user_message.delete()
-
-            raise RuntimeError(
-                "Unable to generate an AI response."
-            ) from exc
-
-        # -----------------------------------------
-        # 6. Validate AI response
-        # -----------------------------------------
-
-        if not assistant_content:
-
-            user_message.delete()
-
-            raise RuntimeError(
-                "The AI returned an empty response."
-            )
-
-        assistant_content = str(
-            assistant_content
-        ).strip()
-
-        if not assistant_content:
-
-            user_message.delete()
-
-            raise RuntimeError(
-                "The AI returned an empty response."
-            )
-
-        # -----------------------------------------
-        # 7. Save assistant response
-        # -----------------------------------------
-
         assistant_message = Message.objects.create(
             thread=thread,
             role=Message.Role.ASSISTANT,
-            content=assistant_content,
+            content=ai_response,
         )
 
-        # -----------------------------------------
-        # 8. Update thread timestamp
-        # -----------------------------------------
-
-        thread.save(
-            update_fields=["updated_at"]
-        )
+        thread.save(update_fields=["updated_at"])
 
         return {
             "user_message": user_message,

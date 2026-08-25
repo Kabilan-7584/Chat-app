@@ -231,3 +231,51 @@ class ChatServiceTests(TestCase):
             ).count(),
             0,
         )
+
+
+    @patch(
+        "chatbot.services.chat_service.GeminiService.generate_response"
+    )
+    def test_multi_turn_context_is_preserved(
+        self,
+        mock_generate,
+    ):
+
+        Message.objects.create(
+            thread=self.thread,
+            role=Message.Role.USER,
+            content="What is Python?",
+        )
+
+        Message.objects.create(
+            thread=self.thread,
+            role=Message.Role.ASSISTANT,
+            content="Python is a programming language.",
+        )
+
+        mock_generate.return_value = (
+            "Python was created by Guido van Rossum."
+        )
+
+        self.service.send_message(
+            user=self.user,
+            thread=self.thread,
+            content="Who created it?",
+        )
+
+        mock_generate.assert_called_once_with(
+            [
+                {
+                    "role": "user",
+                    "content": "What is Python?",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Python is a programming language.",
+                },
+                {
+                    "role": "user",
+                    "content": "Who created it?",
+                },
+            ]
+        )
