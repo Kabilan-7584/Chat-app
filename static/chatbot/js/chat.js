@@ -554,6 +554,12 @@ document.addEventListener("DOMContentLoaded", () => {
         title
     ) {
 
+        const wrapper =
+            document.createElement("div");
+
+        wrapper.className =
+            "history-item-wrapper";
+
         const button =
             document.createElement("button");
 
@@ -571,6 +577,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
         button.textContent =
             title;
+
+        const deleteButton =
+            document.createElement("button");
+
+        deleteButton.className =
+            "delete-thread-button";
+
+        deleteButton.type =
+            "button";
+
+        deleteButton.textContent =
+            "Delete";
+
+        deleteButton.title =
+            "Delete this conversation";
 
         const existingItems =
             document.querySelectorAll(
@@ -599,8 +620,30 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         );
 
-        chatHistoryList.prepend(
+        deleteButton.addEventListener(
+            "click",
+            async (event) => {
+
+                event.stopPropagation();
+
+                await deleteThread(
+                    threadId,
+                    wrapper
+                );
+
+            }
+        );
+
+        wrapper.appendChild(
             button
+        );
+
+        wrapper.appendChild(
+            deleteButton
+        );
+
+        chatHistoryList.prepend(
+            wrapper
         );
 
     }
@@ -788,6 +831,164 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /*
      * =========================================
+     * DELETE THREAD
+     * =========================================
+     */
+
+    async function deleteThread(
+        threadId,
+        historyElement
+    ) {
+
+        const confirmed =
+            window.confirm(
+                "Are you sure you want to delete this conversation?"
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+
+            const response =
+                await fetch(
+                    `/chat/${threadId}/delete/`,
+                    {
+                        method: "DELETE",
+
+                        headers: {
+                            "X-CSRFToken":
+                                getCsrfToken(),
+
+                            "X-Requested-With":
+                                "XMLHttpRequest",
+                        },
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok || !data.success) {
+
+                throw new Error(
+                    data.error ||
+                    "Unable to delete conversation."
+                );
+
+            }
+
+            historyElement.remove();
+
+            if (
+                String(currentThreadId) ===
+                String(threadId)
+            ) {
+
+                const remaining =
+                    document.querySelector(
+                        ".history-item"
+                    );
+
+                if (remaining) {
+
+                    switchThread(
+                        remaining.dataset.threadId,
+                        remaining.dataset.threadTitle
+                    );
+
+                } else {
+
+                    await createNewChatAfterDelete();
+
+                }
+
+            }
+
+            showStatus(
+                "Conversation deleted.",
+                "success"
+            );
+
+        } catch (error) {
+
+            showStatus(
+                error.message ||
+                "Unable to delete conversation.",
+                "error"
+            );
+
+        }
+
+    }
+
+
+    async function createNewChatAfterDelete() {
+
+        try {
+
+            const response =
+                await fetch(
+                    createThreadUrl,
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "X-CSRFToken":
+                                getCsrfToken(),
+
+                            "X-Requested-With":
+                                "XMLHttpRequest",
+                        },
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok) {
+
+                throw new Error(
+                    data.error ||
+                    "Unable to create new chat."
+                );
+
+            }
+
+            currentThreadId =
+                data.thread.id;
+
+            sendUrlTemplate =
+                `/chat/${currentThreadId}/message/`;
+
+            chatTitle.textContent =
+                data.thread.title;
+
+            messagesContainer.innerHTML =
+                "";
+
+            addEmptyChatMessage();
+
+            addHistoryItem(
+                data.thread.id,
+                data.thread.title
+            );
+
+        } catch (error) {
+
+            showStatus(
+                error.message ||
+                "Unable to create new chat.",
+                "error"
+            );
+
+        }
+
+    }
+
+    /*
+     * =========================================
      * MOBILE SIDEBAR
      * =========================================
      */
@@ -804,3 +1005,5 @@ document.addEventListener("DOMContentLoaded", () => {
     );
 
 });
+
+

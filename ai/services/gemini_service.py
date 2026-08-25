@@ -1,10 +1,5 @@
 import os
 
-from langchain_core.messages import (
-    AIMessage,
-    HumanMessage,
-    SystemMessage,
-)
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 
@@ -24,66 +19,18 @@ class GeminiService:
 
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-3.5-flash-lite",
+            temperature=0,
+            max_retries=2,
+            request_timeout=60,
             api_key=api_key,
-
-            # Faster responses for chat.
-            thinking_level="low",
-
-            # Prevent requests from hanging indefinitely.
-            request_timeout=30,
-
-            # Only one automatic retry.
-            retries=1,
+            thinking_level="minimal",
         )
 
-    def generate_response(self, conversation) -> str:
-        """
-        Send a conversation to Gemini and return
-        the assistant response.
-        """
-
-        if not conversation:
-            raise ValueError(
-                "Conversation cannot be empty."
-            )
-
-        messages = []
-
-        for item in conversation:
-
-            role = item.get("role")
-            content = item.get("content")
-
-            if not content:
-                continue
-
-            if role == "user":
-
-                messages.append(
-                    HumanMessage(
-                        content=content
-                    )
-                )
-
-            elif role == "assistant":
-
-                messages.append(
-                    AIMessage(
-                        content=content
-                    )
-                )
-
-            elif role == "system":
-
-                messages.append(
-                    SystemMessage(
-                        content=content
-                    )
-                )
+    def generate_response(self, messages):
 
         if not messages:
             raise ValueError(
-                "Conversation contains no valid messages."
+                "Messages cannot be empty."
             )
 
         try:
@@ -92,14 +39,7 @@ class GeminiService:
                 messages
             )
 
-            response_text = response.text
-
-            if not response_text:
-                raise RuntimeError(
-                    "Gemini returned an empty response."
-                )
-
-            return response_text.strip()
+            return response.text
 
         except Exception as exc:
 

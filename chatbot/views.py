@@ -1,9 +1,7 @@
-import json
-
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from .models import ChatThread, Message
 from .services.chat_service import ChatService
@@ -12,12 +10,6 @@ from .services.chat_service import ChatService
 @login_required
 @require_GET
 def dashboard(request):
-    """
-    Display the chat dashboard.
-
-    Only the authenticated user's threads are loaded.
-    """
-
     threads = (
         ChatThread.objects
         .filter(user=request.user)
@@ -47,9 +39,6 @@ def dashboard(request):
 @login_required
 @require_GET
 def thread_messages(request, thread_id):
-    """
-    Return messages for a thread owned by the authenticated user.
-    """
 
     thread = get_object_or_404(
         ChatThread,
@@ -60,7 +49,7 @@ def thread_messages(request, thread_id):
     messages = (
         Message.objects
         .filter(thread=thread)
-        .order_by("created_at")
+        .order_by("created_at", "id")
     )
 
     return JsonResponse(
@@ -86,9 +75,6 @@ def thread_messages(request, thread_id):
 @login_required
 @require_POST
 def create_thread(request):
-    """
-    Create a new chat thread for the authenticated user.
-    """
 
     thread = ChatThread.objects.create(
         user=request.user,
@@ -110,9 +96,6 @@ def create_thread(request):
 @login_required
 @require_POST
 def send_message(request, thread_id):
-    """
-    Receive a user message and generate an AI response.
-    """
 
     thread = get_object_or_404(
         ChatThread,
@@ -121,6 +104,8 @@ def send_message(request, thread_id):
     )
 
     try:
+        import json
+
         data = json.loads(
             request.body.decode("utf-8")
         )
@@ -137,6 +122,7 @@ def send_message(request, thread_id):
     content = data.get("message")
 
     try:
+
         result = ChatService().send_message(
             user=request.user,
             thread=thread,
@@ -144,6 +130,7 @@ def send_message(request, thread_id):
         )
 
     except ValueError as exc:
+
         return JsonResponse(
             {
                 "success": False,
@@ -153,6 +140,7 @@ def send_message(request, thread_id):
         )
 
     except PermissionError:
+
         return JsonResponse(
             {
                 "success": False,
@@ -162,6 +150,7 @@ def send_message(request, thread_id):
         )
 
     except RuntimeError:
+
         return JsonResponse(
             {
                 "success": False,
@@ -174,6 +163,7 @@ def send_message(request, thread_id):
         )
 
     except Exception:
+
         return JsonResponse(
             {
                 "success": False,
@@ -200,5 +190,25 @@ def send_message(request, thread_id):
                     assistant_message.created_at.isoformat()
                 ),
             },
+        }
+    )
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_thread(request, thread_id):
+
+    thread = get_object_or_404(
+        ChatThread,
+        id=thread_id,
+        user=request.user,
+    )
+
+    thread.delete()
+
+    return JsonResponse(
+        {
+            "success": True,
+            "message": "Chat deleted successfully.",
         }
     )

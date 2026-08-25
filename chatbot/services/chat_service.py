@@ -127,9 +127,21 @@ class ChatService:
             content=ai_response,
         )
 
-        thread.save(update_fields=["updated_at"])
+        if thread.title == "New Chat":
+            thread.title = content[:50]
+            thread.save(
+                update_fields=[
+                    "title",
+                    "updated_at",
+                ]
+            )
+        else:
+            thread.save(
+                update_fields=["updated_at"]
+            )
 
         return {
             "user_message": user_message,
             "assistant_message": assistant_message,
         }
+

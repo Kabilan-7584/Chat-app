@@ -30,4 +30,10 @@ urlpatterns = [
         views.send_message,
         name="send_message",
     ),
+
+    path(
+        "<int:thread_id>/delete/",
+        views.delete_thread,
+        name="delete_thread",
+    ),
 ]
