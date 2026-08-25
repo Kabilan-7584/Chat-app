@@ -1,3 +1,15 @@
 from django.urls import path
 
-urlpatterns = []
+from . import views
+
+
+app_name = "chatbot"
+
+
+urlpatterns = [
+    path(
+        "",
+        views.dashboard,
+        name="dashboard",
+    ),
+]
