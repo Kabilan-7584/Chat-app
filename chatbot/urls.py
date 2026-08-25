@@ -12,4 +12,16 @@ urlpatterns = [
         views.dashboard,
         name="dashboard",
     ),
+
+    path(
+        "new/",
+        views.create_thread,
+        name="create_thread",
+    ),
+
+    path(
+        "<int:thread_id>/message/",
+        views.send_message,
+        name="send_message",
+    ),
 ]

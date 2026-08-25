@@ -1,5 +1,4 @@
 import os
-import time
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -27,7 +26,6 @@ class GeminiService:
     def generate_response(self, prompt: str) -> str:
         """
         Send a prompt to Gemini and return the text response.
-        Retries temporary Gemini failures before giving up.
         """
 
         if not prompt or not prompt.strip():
@@ -35,19 +33,11 @@ class GeminiService:
                 "Prompt cannot be empty."
             )
 
-        max_attempts = 3
+        try:
+            response = self.llm.invoke(prompt)
+            return response.text
 
-        for attempt in range(max_attempts):
-            try:
-                response = self.llm.invoke(prompt)
-                return response.text
-
-            except Exception as exc:
-
-                if attempt == max_attempts - 1:
-                    raise RuntimeError(
-                        "Gemini request failed after multiple attempts."
-                    ) from exc
-
-                wait_seconds = 2 ** attempt
-                time.sleep(wait_seconds)
+        except Exception as exc:
+            raise RuntimeError(
+                "Gemini request failed."
+            ) from exc

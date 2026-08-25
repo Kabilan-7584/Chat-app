@@ -2,23 +2,52 @@
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>AI Chat Assistant</title>
 
-    <link rel="stylesheet" href="{% static 'chatbot/css/chat.css' %}">
+    <meta
+        name="csrf-token"
+        content="{{ csrf_token }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{% static 'chatbot/css/chat.css' %}"
+    >
+
 </head>
 
 <body>
 
-<div class="chat-app">
+<div
+    class="chat-app"
+    id="chat-app"
+    data-current-thread-id="{{ current_thread.id }}"
+    data-send-url-template="{% url 'chatbot:send_message' current_thread.id %}"
+    data-create-thread-url="{% url 'chatbot:create_thread' %}"
+>
 
-    <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar">
+
+    <!-- ======================================
+         SIDEBAR
+         ====================================== -->
+
+    <aside
+        class="sidebar"
+        id="sidebar"
+    >
 
         <div class="sidebar-header">
+
             <h1>AI Assistant</h1>
 
             <button
@@ -28,7 +57,9 @@
             >
                 + New Chat
             </button>
+
         </div>
+
 
         <div class="chat-history">
 
@@ -36,26 +67,34 @@
 
             <div id="chat-history-list">
 
-                <!-- Mock history for Phase 6 -->
-                <button class="history-item active" type="button">
-                    Learning Django
-                </button>
+                {% for thread in threads %}
 
-                <button class="history-item" type="button">
-                    Python Questions
-                </button>
+                    <button
+                        class="history-item {% if thread.id == current_thread.id %}active{% endif %}"
+                        type="button"
+                        data-thread-id="{{ thread.id }}"
+                        data-thread-title="{{ thread.title }}"
+                    >
+                        {{ thread.title|default:"New Chat" }}
+                    </button>
 
-                <button class="history-item" type="button">
-                    RAG Concepts
-                </button>
+                {% empty %}
+
+                    <p class="empty-history">
+                        No chats yet.
+                    </p>
+
+                {% endfor %}
 
             </div>
 
         </div>
 
+
         <div class="sidebar-footer">
 
             <div class="user-info">
+
                 <span class="user-avatar">
                     {{ request.user.username|first|upper }}
                 </span>
@@ -63,9 +102,15 @@
                 <span class="username">
                     {{ request.user.username }}
                 </span>
+
             </div>
 
-            <form method="post" action="{% url 'accounts:logout' %}">
+
+            <form
+                method="post"
+                action="{% url 'accounts:logout' %}"
+            >
+
                 {% csrf_token %}
 
                 <button
@@ -74,6 +119,7 @@
                 >
                     Logout
                 </button>
+
             </form>
 
         </div>
@@ -81,10 +127,15 @@
     </aside>
 
 
-    <!-- MAIN CHAT -->
+    <!-- ======================================
+         MAIN CHAT
+         ====================================== -->
+
     <main class="chat-main">
 
+
         <!-- HEADER -->
+
         <header class="chat-header">
 
             <button
@@ -96,94 +147,66 @@
                 ?
             </button>
 
+
             <div>
+
                 <h2 id="chat-title">
-                    Learning Django
+                    {{ current_thread.title|default:"New Chat" }}
                 </h2>
 
                 <span class="chat-status">
-                    AI Assistant
+                    Gemini AI Assistant
                 </span>
+
             </div>
 
         </header>
 
 
-        <!-- MESSAGES -->
+        <!-- ==================================
+             MESSAGES
+             ================================== -->
+
         <section
             class="messages-container"
             id="messages-container"
             aria-live="polite"
         >
 
-            <!-- Mock message -->
-            <div class="message assistant-message">
+            <!-- Initial empty-state message -->
 
-                <div class="message-avatar">
+            <div
+                class="empty-chat-message"
+                id="empty-chat-message"
+            >
+
+                <div class="empty-chat-icon">
                     AI
                 </div>
 
-                <div class="message-content">
-                    <div class="message-role">
-                        Assistant
-                    </div>
+                <h3>
+                    How can I help you?
+                </h3>
 
-                    <div class="message-text">
-                        Hello! I'm your AI Assistant. How can I help you today?
-                    </div>
-                </div>
-
-            </div>
-
-
-            <!-- Mock message -->
-            <div class="message user-message">
-
-                <div class="message-avatar">
-                    {{ request.user.username|first|upper }}
-                </div>
-
-                <div class="message-content">
-                    <div class="message-role">
-                        You
-                    </div>
-
-                    <div class="message-text">
-                        Explain Django in simple terms.
-                    </div>
-                </div>
-
-            </div>
-
-
-            <!-- Mock message -->
-            <div class="message assistant-message">
-
-                <div class="message-avatar">
-                    AI
-                </div>
-
-                <div class="message-content">
-                    <div class="message-role">
-                        Assistant
-                    </div>
-
-                    <div class="message-text">
-                        Django is a Python web framework that helps developers
-                        build web applications quickly using a structured
-                        architecture.
-                    </div>
-                </div>
+                <p>
+                    Ask me anything and Gemini will generate
+                    a response.
+                </p>
 
             </div>
 
         </section>
 
 
-        <!-- MESSAGE INPUT -->
+        <!-- ==================================
+             INPUT
+             ================================== -->
+
         <section class="input-area">
 
             <form id="message-form">
+
+                {% csrf_token %}
 
                 <div class="input-wrapper">
 
@@ -191,6 +214,7 @@
                         id="message-input"
                         name="message"
                         rows="1"
+                        maxlength="10000"
                         placeholder="Message AI Assistant..."
                         aria-label="Message"
                     ></textarea>
@@ -205,8 +229,11 @@
 
                 </div>
 
-                <p class="input-disclaimer">
-                    AI responses will be connected in a later phase.
+                <p
+                    class="input-disclaimer"
+                    id="input-status"
+                >
+                    Powered by Google Gemini.
                 </p>
 
             </form>
@@ -217,7 +244,11 @@
 
 </div>
 
-<script src="{% static 'chatbot/js/chat.js' %}"></script>
+
+<script
+    src="{% static 'chatbot/js/chat.js' %}"
+></script>
 
 </body>
+
 </html>
