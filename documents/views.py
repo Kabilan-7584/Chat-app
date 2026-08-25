@@ -3,6 +3,9 @@ from django.shortcuts import redirect, render
 
 from .forms import DocumentUploadForm
 from .models import Document
+from .services.document_processing_service import (
+    DocumentProcessingService,
+)
 
 
 @login_required
@@ -50,6 +53,16 @@ def upload_document(request):
             )
 
             document.save()
+
+            try:
+
+                DocumentProcessingService().process(
+                    document
+                )
+
+            except RuntimeError:
+
+                pass
 
             return redirect(
                 "documents:document_list"
