@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>My Documents</title>
+
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .upload {
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            background: #222;
+            color: white;
+        }
+
+        .document {
+            background: white;
+            padding: 20px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+        }
+
+        .filename {
+            font-weight: bold;
+        }
+
+        .status {
+            margin-top: 8px;
+            color: #666;
+        }
+
+        .empty {
+            background: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 8px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+
+        <h1>My Documents</h1>
+
+        <a
+            class="upload"
+            href="{% url 'documents:upload' %}"
+        >
+            Upload PDF
+        </a>
+
+    </div>
+
+    {% if documents %}
+
+        {% for document in documents %}
+
+            <div class="document">
+
+                <div class="filename">
+                    {{ document.filename }}
+                </div>
+
+                <div class="status">
+                    Status:
+                    {{ document.get_status_display }}
+                </div>
+
+                <div class="status">
+                    Uploaded:
+                    {{ document.created_at }}
+                </div>
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <div class="empty">
+
+            <p>
+                You haven't uploaded any documents yet.
+            </p>
+
+            <a
+                href="{% url 'documents:upload' %}"
+            >
+                Upload your first PDF
+            </a>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+</body>
+
+</html>
