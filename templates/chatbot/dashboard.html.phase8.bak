@@ -1,0 +1,254 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AI Chat Assistant</title>
+
+    <meta
+        name="csrf-token"
+        content="{{ csrf_token }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{% static 'chatbot/css/chat.css' %}"
+    >
+
+</head>
+
+<body>
+
+<div
+    class="chat-app"
+    id="chat-app"
+    data-current-thread-id="{{ current_thread.id }}"
+    data-send-url-template="{% url 'chatbot:send_message' current_thread.id %}"
+    data-create-thread-url="{% url 'chatbot:create_thread' %}"
+>
+
+
+    <!-- ======================================
+         SIDEBAR
+         ====================================== -->
+
+    <aside
+        class="sidebar"
+        id="sidebar"
+    >
+
+        <div class="sidebar-header">
+
+            <h1>AI Assistant</h1>
+
+            <button
+                class="new-chat-button"
+                id="new-chat-button"
+                type="button"
+            >
+                + New Chat
+            </button>
+
+        </div>
+
+
+        <div class="chat-history">
+
+            <h2>Chat History</h2>
+
+            <div id="chat-history-list">
+
+                {% for thread in threads %}
+
+                    <button
+                        class="history-item {% if thread.id == current_thread.id %}active{% endif %}"
+                        type="button"
+                        data-thread-id="{{ thread.id }}"
+                        data-thread-title="{{ thread.title }}"
+                    >
+                        {{ thread.title|default:"New Chat" }}
+                    </button>
+
+                {% empty %}
+
+                    <p class="empty-history">
+                        No chats yet.
+                    </p>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+
+        <div class="sidebar-footer">
+
+            <div class="user-info">
+
+                <span class="user-avatar">
+                    {{ request.user.username|first|upper }}
+                </span>
+
+                <span class="username">
+                    {{ request.user.username }}
+                </span>
+
+            </div>
+
+
+            <form
+                method="post"
+                action="{% url 'accounts:logout' %}"
+            >
+
+                {% csrf_token %}
+
+                <button
+                    class="logout-button"
+                    type="submit"
+                >
+                    Logout
+                </button>
+
+            </form>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ======================================
+         MAIN CHAT
+         ====================================== -->
+
+    <main class="chat-main">
+
+
+        <!-- HEADER -->
+
+        <header class="chat-header">
+
+            <button
+                class="mobile-menu-button"
+                id="mobile-menu-button"
+                type="button"
+                aria-label="Open menu"
+            >
+                ?
+            </button>
+
+
+            <div>
+
+                <h2 id="chat-title">
+                    {{ current_thread.title|default:"New Chat" }}
+                </h2>
+
+                <span class="chat-status">
+                    Gemini AI Assistant
+                </span>
+
+            </div>
+
+        </header>
+
+
+        <!-- ==================================
+             MESSAGES
+             ================================== -->
+
+        <section
+            class="messages-container"
+            id="messages-container"
+            aria-live="polite"
+        >
+
+            <!-- Initial empty-state message -->
+
+            <div
+                class="empty-chat-message"
+                id="empty-chat-message"
+            >
+
+                <div class="empty-chat-icon">
+                    AI
+                </div>
+
+                <h3>
+                    How can I help you?
+                </h3>
+
+                <p>
+                    Ask me anything and Gemini will generate
+                    a response.
+                </p>
+
+            </div>
+
+        </section>
+
+
+        <!-- ==================================
+             INPUT
+             ================================== -->
+
+        <section class="input-area">
+
+            <form id="message-form">
+
+                {% csrf_token %}
+
+                <div class="input-wrapper">
+
+                    <textarea
+                        id="message-input"
+                        name="message"
+                        rows="1"
+                        maxlength="10000"
+                        placeholder="Message AI Assistant..."
+                        aria-label="Message"
+                    ></textarea>
+
+                    <button
+                        type="submit"
+                        id="send-button"
+                        class="send-button"
+                    >
+                        Send
+                    </button>
+
+                </div>
+
+                <p
+                    class="input-disclaimer"
+                    id="input-status"
+                >
+                    Powered by Google Gemini.
+                </p>
+
+            </form>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<script
+    src="{% static 'chatbot/js/chat.js' %}"
+></script>
+
+</body>
+
+</html>
