@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.urls import reverse
 
 from .models import Document
 
@@ -8,114 +9,213 @@ from .models import Document
 User = get_user_model()
 
 
-class DocumentModelTests(TestCase):
+class DocumentUploadTests(TestCase):
 
     def setUp(self):
 
         self.user = User.objects.create_user(
-            username="documentuser",
+            username="uploaduser",
             password="TestPassword123!",
         )
 
-    def create_document(self):
+        self.other_user = User.objects.create_user(
+            username="otheruser",
+            password="TestPassword123!",
+        )
 
-        uploaded_file = SimpleUploadedFile(
-            "test.pdf",
-            b"%PDF-test-content",
+    def create_pdf(
+        self,
+        filename="test.pdf",
+        size=100,
+    ):
+
+        return SimpleUploadedFile(
+            filename,
+            b"%PDF-" + (b"x" * size),
             content_type="application/pdf",
         )
 
-        return Document.objects.create(
-            user=self.user,
-            file=uploaded_file,
-            filename="test.pdf",
+    def test_upload_page_requires_login(self):
+
+        response = self.client.get(
+            reverse("documents:upload")
         )
-
-    def test_document_has_correct_owner(self):
-
-        document = self.create_document()
 
         self.assertEqual(
-            document.user,
-            self.user,
+            response.status_code,
+            302,
         )
 
-    def test_document_defaults_to_uploaded_status(self):
+    def test_document_list_requires_login(self):
 
-        document = self.create_document()
+        response = self.client.get(
+            reverse("documents:document_list")
+        )
 
         self.assertEqual(
-            document.status,
-            Document.ProcessingStatus.UPLOADED,
+            response.status_code,
+            302,
         )
 
-    def test_document_filename_is_saved(self):
+    def test_authenticated_user_can_upload_pdf(self):
 
-        document = self.create_document()
+        self.client.login(
+            username="uploaduser",
+            password="TestPassword123!",
+        )
+
+        response = self.client.post(
+            reverse("documents:upload"),
+            {
+                "file": self.create_pdf(),
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("documents:document_list"),
+        )
+
+        document = Document.objects.get(
+            user=self.user
+        )
 
         self.assertEqual(
             document.filename,
             "test.pdf",
         )
 
-    def test_document_timestamps_are_created(self):
-
-        document = self.create_document()
-
-        self.assertIsNotNone(
-            document.created_at,
-        )
-
-        self.assertIsNotNone(
-            document.updated_at,
-        )
-
-    def test_document_status_choices_exist(self):
-
         self.assertEqual(
+            document.status,
             Document.ProcessingStatus.UPLOADED,
-            "UPLOADED",
+        )
+
+    def test_non_pdf_is_rejected(self):
+
+        self.client.login(
+            username="uploaduser",
+            password="TestPassword123!",
+        )
+
+        file = SimpleUploadedFile(
+            "test.txt",
+            b"not a pdf",
+            content_type="text/plain",
+        )
+
+        response = self.client.post(
+            reverse("documents:upload"),
+            {
+                "file": file,
+            },
         )
 
         self.assertEqual(
-            Document.ProcessingStatus.PROCESSING,
-            "PROCESSING",
+            response.status_code,
+            200,
         )
 
         self.assertEqual(
-            Document.ProcessingStatus.READY,
-            "READY",
+            Document.objects.count(),
+            0,
         )
 
-        self.assertEqual(
-            Document.ProcessingStatus.FAILED,
-            "FAILED",
+    def test_large_file_is_rejected(self):
+
+        self.client.login(
+            username="uploaduser",
+            password="TestPassword123!",
         )
 
-    def test_user_can_have_multiple_documents(self):
-
-        document1 = self.create_document()
-
-        document2_file = SimpleUploadedFile(
-            "second.pdf",
-            b"%PDF-second-content",
+        large_file = SimpleUploadedFile(
+            "large.pdf",
+            b"%PDF-" + (
+                b"x"
+                * (
+                    10 * 1024 * 1024
+                    + 1
+                )
+            ),
             content_type="application/pdf",
         )
 
-        document2 = Document.objects.create(
+        response = self.client.post(
+            reverse("documents:upload"),
+            {
+                "file": large_file,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            Document.objects.count(),
+            0,
+        )
+
+    def test_document_list_only_shows_current_users_documents(self):
+
+        self.client.login(
+            username="uploaduser",
+            password="TestPassword123!",
+        )
+
+        own_file = self.create_pdf(
+            filename="own.pdf"
+        )
+
+        other_file = self.create_pdf(
+            filename="other.pdf"
+        )
+
+        Document.objects.create(
             user=self.user,
-            file=document2_file,
-            filename="second.pdf",
+            file=own_file,
+            filename="own.pdf",
+        )
+
+        Document.objects.create(
+            user=self.other_user,
+            file=other_file,
+            filename="other.pdf",
+        )
+
+        response = self.client.get(
+            reverse("documents:document_list")
+        )
+
+        self.assertContains(
+            response,
+            "own.pdf",
+        )
+
+        self.assertNotContains(
+            response,
+            "other.pdf",
+        )
+
+    def test_uploaded_document_starts_with_uploaded_status(self):
+
+        self.client.login(
+            username="uploaduser",
+            password="TestPassword123!",
+        )
+
+        self.client.post(
+            reverse("documents:upload"),
+            {
+                "file": self.create_pdf(),
+            },
+        )
+
+        document = Document.objects.get(
+            user=self.user
         )
 
         self.assertEqual(
-            Document.objects.filter(
-                user=self.user
-            ).count(),
-            2,
-        )
-
-        self.assertEqual(
-            document1.user,
-            document2.user,
+            document.status,
+            Document.ProcessingStatus.UPLOADED,
         )
