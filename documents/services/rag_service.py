@@ -21,6 +21,8 @@ class RAGService:
         ↓
     Context
         ↓
+    Conversation History
+        ↓
     Grounded Prompt
         ↓
     Gemini
@@ -51,11 +53,15 @@ class RAGService:
         user_id,
         query,
         document_id=None,
+        conversation_history=None,
         top_k=DEFAULT_TOP_K,
     ):
         """
         Retrieve relevant document chunks and
         generate a grounded answer using Gemini.
+
+        Conversation history is used to understand
+        follow-up questions.
         """
 
         if user_id is None:
@@ -75,6 +81,9 @@ class RAGService:
                 "Query cannot be empty."
             )
 
+        if conversation_history is None:
+            conversation_history = []
+
         results = self.retriever.retrieve(
             user_id=user_id,
             query=query,
@@ -89,6 +98,9 @@ class RAGService:
         prompt = self._build_prompt(
             query=query,
             context=context,
+            conversation_history=(
+                conversation_history
+            ),
         )
 
         response = self.gemini.generate_response(
@@ -187,14 +199,60 @@ class RAGService:
         return sources
 
     @staticmethod
+    def _build_conversation_history(
+        conversation_history,
+    ):
+        """
+        Convert stored conversation messages
+        into readable prompt context.
+        """
+
+        if not conversation_history:
+            return "No previous conversation."
+
+        history_parts = []
+
+        for message in conversation_history:
+            role = message.get(
+                "role",
+                "",
+            )
+
+            content = message.get(
+                "content",
+                "",
+            )
+
+            history_parts.append(
+                f"{role.upper()}: {content}"
+            )
+
+        return "\n".join(
+            history_parts
+        )
+
+    @classmethod
     def _build_prompt(
+        cls,
         *,
         query,
         context,
+        conversation_history=None,
     ):
         """
-        Build a grounding-focused prompt.
+        Build a grounding-focused prompt with
+        optional previous conversation context.
+
+        conversation_history is optional so that
+        single-turn RAG requests and existing tests
+        continue to work.
         """
+
+        history = (
+            cls._build_conversation_history(
+                conversation_history
+            )
+        )
 
         return f"""
 You are a document question-answering assistant.
@@ -203,25 +261,33 @@ Answer the user's question using ONLY the
 information contained in the provided document
 context.
 
+Use previous conversation only to understand
+follow-up questions and references such as
+"it", "they", "that", or "this".
+
 GROUNDING RULES:
 
-1. Use the provided context as the source of truth.
-2. Do not invent or assume information that is
-   not present in the context.
-3. Do not use outside knowledge to fill missing
-   information.
-4. If the context does not contain enough
-   information to answer the question, clearly
-   state that the answer is not supported by
-   the provided documents.
-5. Keep the answer concise and directly related
-   to the question.
+1. Use the provided document context as the
+   source of truth.
+2. Do not invent information.
+3. Do not use outside knowledge to fill gaps.
+4. If the answer is not supported by the
+   document context, clearly state that the
+   answer is not supported by the provided
+   documents.
+5. Previous conversation must not override
+   the document context.
+6. Keep the answer concise and relevant.
+
+PREVIOUS CONVERSATION:
+
+{history}
 
 DOCUMENT CONTEXT:
 
 {context}
 
-USER QUESTION:
+CURRENT USER QUESTION:
 
 {query}
 

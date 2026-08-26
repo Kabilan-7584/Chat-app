@@ -1,83 +1,130 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>My Documents</title>
 
     <style>
-
         body {
-            font-family: Arial, sans-serif;
             margin: 0;
-            padding: 40px;
-            background: #f5f5f5;
-        }
-
-        .container {
-            max-width: 900px;
-            margin: auto;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #1f2937;
         }
 
         .header {
+            background: #111827;
+            color: white;
+            padding: 20px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            margin: 0;
+        }
+
+        .header a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 25px;
         }
 
-        .upload {
-            text-decoration: none;
-            padding: 10px 16px;
-            border-radius: 6px;
-            background: #222;
+        .button {
+            display: inline-block;
+            background: #111827;
             color: white;
-        }
-
-        .document {
-            background: white;
-            padding: 20px;
-            margin-bottom: 12px;
+            padding: 12px 18px;
             border-radius: 8px;
+            text-decoration: none;
         }
 
-        .filename {
+        .documents {
+            display: grid;
+            gap: 16px;
+        }
+
+        .document-card {
+            background: white;
+            border-radius: 12px;
+            padding: 22px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .document-name {
+            font-size: 18px;
             font-weight: bold;
+            margin-bottom: 8px;
         }
 
         .status {
-            margin-top: 8px;
-            color: #666;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .chat-button {
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+        }
+
+        .disabled {
+            background: #9ca3af;
+            pointer-events: none;
         }
 
         .empty {
             background: white;
-            padding: 30px;
+            padding: 40px;
             text-align: center;
-            border-radius: 8px;
+            border-radius: 12px;
         }
-
     </style>
-
 </head>
 
 <body>
 
-<div class="container">
+<header class="header">
 
-    <div class="header">
+    <h1>My Documents</h1>
 
-        <h1>My Documents</h1>
+    <div>
+        <a href="/chat/">AI Chat</a>
+        <a href="/accounts/logout/">Logout</a>
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <div class="top-bar">
+
+        <h2>Documents</h2>
 
         <a
-            class="upload"
+            class="button"
             href="{% url 'documents:upload' %}"
         >
             Upload PDF
@@ -85,50 +132,81 @@
 
     </div>
 
+
     {% if documents %}
 
-        {% for document in documents %}
+        <div class="documents">
 
-            <div class="document">
+            {% for document in documents %}
 
-                <div class="filename">
-                    {{ document.filename }}
+                <div class="document-card">
+
+                    <div>
+
+                        <div class="document-name">
+                            {{ document.filename }}
+                        </div>
+
+                        <div class="status">
+                            Status:
+                            {{ document.get_status_display }}
+                        </div>
+
+                    </div>
+
+
+                    <div>
+
+                        {% if document.status == "READY" %}
+
+                            <a
+                                class="chat-button"
+                                href="{% url 'documents:document_chat_page' document.id %}"
+                            >
+                                Chat with Document
+                            </a>
+
+                        {% else %}
+
+                            <span
+                                class="chat-button disabled"
+                            >
+                                Not Ready
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
                 </div>
 
-                <div class="status">
-                    Status:
-                    {{ document.get_status_display }}
-                </div>
+            {% endfor %}
 
-                <div class="status">
-                    Uploaded:
-                    {{ document.created_at }}
-                </div>
-
-            </div>
-
-        {% endfor %}
+        </div>
 
     {% else %}
 
         <div class="empty">
 
+            <h2>No documents yet</h2>
+
             <p>
-                You haven't uploaded any documents yet.
+                Upload a PDF to start asking questions
+                about your documents.
             </p>
 
             <a
+                class="button"
                 href="{% url 'documents:upload' %}"
             >
-                Upload your first PDF
+                Upload PDF
             </a>
 
         </div>
 
     {% endif %}
 
-</div>
+</main>
 
 </body>
-
 </html>
